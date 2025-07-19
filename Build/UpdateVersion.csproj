@@ -8,6 +8,7 @@
     <RootNamespace>UpdateVersion</RootNamespace>
     <AssemblyName>UpdateVersion</AssemblyName>
     <LangVersion>latest</LangVersion>
+    <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <DebugSymbols>false</DebugSymbols>

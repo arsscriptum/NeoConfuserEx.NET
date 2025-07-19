@@ -1,147 +1,258 @@
-
-<#
-#̷𝓍   𝓐𝓡𝓢 𝓢𝓒𝓡𝓘𝓟𝓣𝓤𝓜
-#̷𝓍   🇵​​​​​🇴​​​​​🇼​​​​​🇪​​​​​🇷​​​​​🇸​​​​​🇭​​​​​🇪​​​​​🇱​​​​​🇱​​​​​ 🇸​​​​​🇨​​​​​🇷​​​​​🇮​​​​​🇵​​​​​🇹​​​​​ 🇧​​​​​🇾​​​​​ 🇬​​​​​🇺​​​​​🇮​​​​​🇱​​​​​🇱​​​​​🇦​​​​​🇺​​​​​🇲​​​​​🇪​​​​​🇵​​​​​🇱​​​​​🇦​​​​​🇳​​​​​🇹​​​​​🇪​​​​​.🇶​​​​​🇨​​​​​@🇬​​​​​🇲​​​​​🇦​​​​​🇮​​​​​🇱​​​​​.🇨​​​​​🇴​​​​​🇲​​​​​
-#>
-
-
-
-function Get-Frameworks{
+[CmdletBinding(SupportsShouldProcess = $true)]
+[OutputType([void])]
+param()
+function Get-Frameworks {
     [CmdletBinding(SupportsShouldProcess)]
     param(
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [switch]$Latest
-    ) 
+    )
 
-    Try{
+    try {
         $FrameWorks = @()
         $Dirs = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64" -Directory -Filter "v*" | Sort -Property Name
-        ForEach($d in $Dirs){
+        foreach ($d in $Dirs) {
             $Name = $d.Name
-            $Fullname = $d.Fullname
-            $Name = $Name.Replace('v','')
-            $Name = $Name.SubString(0,3)
-            $o = [PsCustomObject]@{
+            $Fullname = $d.FullName
+            $Name = $Name.Replace('v', '')
+            $Name = $Name.SubString(0, 3)
+            $o = [pscustomobject]@{
                 Name = $Name
                 Path = $Fullname
             }
-            $FrameWorks += $o  
+            $FrameWorks += $o
         }
-        if($Latest){
-            return $FrameWorks[$FrameWorks.Count-1]
+        if ($Latest) {
+            return $FrameWorks[$FrameWorks.Count - 1]
         }
         $FrameWorks
 
-    }catch{
-        Write-Error $_ 
+    } catch {
+        Write-Error $_
     }
 }
 
-
-function Set-ProjectsFrameworks{
-    [CmdletBinding(SupportsShouldProcess)]
+function Set-ProjectsFrameworks {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([void])]
     param(
-        [Parameter(Mandatory=$true, Position = 0)]
-        [String]$Path,
-        [Parameter(Mandatory=$false)]
-        [String]$Framework="net5.0-windows"
-    ) 
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Path to the folder containing .csproj files")]
+        [ValidateScript({ Test-Path $_ -PathType Container })]
+        [string]$Path,
 
-    try{
-        $projects=(gci $Path -Recurse -File -Filter "*.csproj").Fullname
-        ForEach($pfile in $projects){
-            Write-Host "Updating `"$pfile`""
-            $c = Get-Content "$pfile" -Raw 
-            [xml]$xml = $c
-            if($xml.Project.PropertyGroup.TargetFramework -eq $Null){
-                $Child = $xml.CreateElement("TargetFramework",$xml.Project.NamespaceURI)
-                $Child.InnerText = "$Framework"
-                $Null = $xml.Project.PropertyGroup[0].AppendChild($Child)
-            }else{
-                $Null = $xml.Project.PropertyGroup.TargetFramework = "$Framework"
-            }
-            
-            $xml.Save($pfile)
-        }
-    }catch{
-        Write-Error "$_"
-    }
+        [Parameter(Mandatory = $false, HelpMessage = "Framework to set (e.g., net5.0-windows)")]
+        [string]$Framework = "net5.0-windows"
+    )
 
-    return $null
-}
+    try {
+        $projectFiles = Get-ChildItem -Path $Path -Recurse -Filter '*.csproj' -File -ErrorAction Stop
 
+        foreach ($file in $projectFiles) {
+            Write-Verbose "Processing: $($file.FullName)"
 
-function Set-ProjectsLanguageVersion{
-    [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [Parameter(Mandatory=$true, Position = 0)]
-        [String]$Path,
-        [Parameter(Mandatory=$false)]
-        [String]$LangVersion="latest"
-    ) 
+            try {
+                [xml]$xml = Get-Content -Path $file.FullName -Raw
 
-    try{
-        $projects=(gci $Path -Recurse -File -Filter "*.csproj").Fullname
-        ForEach($pfile in $projects){
-            Write-Host "Updating `"$pfile`""
-            $c = Get-Content "$pfile" -Raw 
-            [xml]$xml = $c
-            if($xml.Project.PropertyGroup.LangVersion -eq $Null){
-                $Child = $xml.CreateElement("LangVersion",$xml.Project.NamespaceURI)
-                $Child.InnerText = "$LangVersion"
-                $Null = $xml.Project.PropertyGroup[0].AppendChild($Child)
-            }else{
-                $Null = $xml.Project.PropertyGroup.LangVersion = "$LangVersion"
-            }
-            
-            $xml.Save($pfile)
-        }
-    }catch{
-        Write-Error "$_"
-    }
+                # Setup namespace manager if needed
+                $nsMgr = New-Object System.Xml.XmlNamespaceManager ($xml.NameTable)
+                $nsMgr.AddNamespace("ns", $xml.DocumentElement.NamespaceURI)
 
-    return $null
-}
+                $propertyGroups = $xml.SelectNodes("//ns:Project/ns:PropertyGroup", $nsMgr)
+                $updated = $false
 
+                foreach ($pg in $propertyGroups) {
+                    $tfNode = $pg.SelectSingleNode("ns:TargetFramework", $nsMgr)
+                    if ($tfNode) {
+                        $tfNode.InnerText = $Framework
+                        $updated = $true
+                    }
+                }
 
+                if (-not $updated -and $propertyGroups.Count -gt 0) {
+                    $newNode = $xml.CreateElement("TargetFramework", $xml.DocumentElement.NamespaceURI)
+                    $newNode.InnerText = $Framework
+                    $null = $propertyGroups[0].AppendChild($newNode)
+                }
 
-function Remove-TargetFrameworkVersion{
-    [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [Parameter(Mandatory=$true, Position = 0)]
-        [String]$Path
-    ) 
-
-    try{
-        Write-Host "Removing `"TargetFrameworkVersion`" " -f Red
-        $projects=(gci $Path -Recurse -File -Filter "*.csproj").Fullname
-        ForEach($pfile in $projects){
-            Write-Host "Updating `"$pfile`" " -f DarkCyan
-            $c = Get-Content "$pfile" -Raw 
-            [xml]$xml = $c
-            if($xml.Project.PropertyGroup.TargetFrameworkVersion -eq $Null){
-                $vchild = $xml.Project.ChildNodes[0].GetElementsByTagName("TargetFrameworkVersion")
-                if($vchild -ne $Null){
-                    $Null = $xml.Project.ChildNodes[0].RemoveChild($vchild[0])
-                    
+                if ($PSCmdlet.ShouldProcess($file.FullName, "Set TargetFramework to $Framework")) {
+                    $xml.Save($file.FullName)
+                    Write-Verbose "Updated: $($file.Name)"
                 }
             }
-            if($xml.Project.PropertyGroup.TargetFramework -eq $Null){
-                $vchild = $xml.Project.ChildNodes[0].GetElementsByTagName("TargetFramework")
-                if($vchild -ne $Null){
-                    $Null = $xml.Project.ChildNodes[0].RemoveChild($vchild[0])
-                    
-                }
+            catch {
+                Write-Warning "Failed to update '$($file.FullName)': $($_.Exception.Message)"
             }
-            $xml.Save($pfile)
         }
-    }catch{
-        Write-Error "$_"
     }
-
-    return $null
+    catch {
+        Write-Error "Unhandled error in function: $($_.Exception.Message)"
+    }
 }
 
-Set-ProjectsLanguageVersion -Path "$PSScriptRoot"
-#Remove-TargetFrameworkVersion -Path "$PSScriptRoot"
-#Set-ProjectsFrameworks -Path "$PSScriptRoot"
+
+
+function Set-ProjectsLanguageVersion {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Path to search for .csproj files")]
+        [ValidateScript({ Test-Path $_ -PathType Container })]
+        [string]$Path,
+
+        [Parameter(Mandatory = $false, HelpMessage = "Language version to set (e.g., 'latest')")]
+        [string]$LangVersion = "latest"
+    )
+
+    try {
+        $projectFiles = Get-ChildItem -Path $Path -Recurse -Filter '*.csproj' -File -ErrorAction Stop
+
+        foreach ($file in $projectFiles) {
+            Write-Verbose "Processing: $($file.FullName)"
+
+            try {
+                [xml]$xml = Get-Content -Path $file.FullName -Raw
+
+                # Namespace-aware handling
+                $nsMgr = New-Object System.Xml.XmlNamespaceManager ($xml.NameTable)
+                $nsMgr.AddNamespace("ns", $xml.DocumentElement.NamespaceURI)
+
+                $propertyGroups = $xml.SelectNodes("//ns:Project/ns:PropertyGroup", $nsMgr)
+                $updated = $false
+
+                foreach ($pg in $propertyGroups) {
+                    $langNode = $pg.SelectSingleNode("ns:LangVersion", $nsMgr)
+                    if ($langNode) {
+                        $langNode.InnerText = $LangVersion
+                        $updated = $true
+                        break
+                    }
+                }
+
+                if (-not $updated -and $propertyGroups.Count -gt 0) {
+                    $newNode = $xml.CreateElement("LangVersion", $xml.DocumentElement.NamespaceURI)
+                    $newNode.InnerText = $LangVersion
+                    $null = $propertyGroups[0].AppendChild($newNode)
+                }
+
+                $xml.Save($file.FullName)
+                Write-Verbose "Updated: $($file.Name)"
+            }
+            catch {
+                Write-Warning "Failed to update '$($file.FullName)': $($_.Exception.Message)"
+            }
+        }
+    }
+    catch {
+        Write-Error "Unhandled error in function: $($_.Exception.Message)"
+    }
+}
+
+
+function Remove-TargetFrameworkVersion {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Path to the folder containing .csproj files")]
+        [ValidateScript({ Test-Path $_ -PathType Container })]
+        [string]$Path
+    )
+
+    try {
+        Write-Verbose "Searching for .csproj files under '$Path'..."
+
+        $projectFiles = Get-ChildItem -Path $Path -Recurse -Filter '*.csproj' -File -ErrorAction Stop
+
+        foreach ($file in $projectFiles) {
+            Write-Verbose "Processing: $($file.FullName)"
+
+            try {
+                [xml]$xml = Get-Content -Path $file.FullName -Raw
+
+                $nsMgr = New-Object System.Xml.XmlNamespaceManager ($xml.NameTable)
+                $nsMgr.AddNamespace("ns", $xml.DocumentElement.NamespaceURI)
+
+                $removed = $false
+
+                foreach ($tagName in 'TargetFrameworkVersion', 'TargetFramework') {
+                    $nodes = $xml.SelectNodes("//ns:Project/ns:PropertyGroup/ns:$tagName", $nsMgr)
+                    foreach ($node in $nodes) {
+                        $null = $node.ParentNode.RemoveChild($node)
+                        $removed = $true
+                        Write-Verbose "Removed <$tagName> from $($file.Name)"
+                    }
+                }
+
+                if ($removed -and $PSCmdlet.ShouldProcess($file.FullName, "Remove target framework tags")) {
+                    $xml.Save($file.FullName)
+                }
+            }
+            catch {
+                Write-Warning "Failed to update '$($file.FullName)': $($_.Exception.Message)"
+            }
+        }
+    }
+    catch {
+        Write-Error "Unhandled error: $($_.Exception.Message)"
+    }
+}
+
+
+
+function Restore-NuGetPackages {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([void])]
+    param()
+
+    try {
+        $RootPath = (Resolve-Path -Path "$($PWD.Path)").Path
+        $NuGetExe = (get-command nuget).Source
+        $projectFiles=gci -Path "$RootPath" -Recurse -filter "*.csproj"  -file | select -ExpandProperty Fullname
+        foreach ($file in $projectFiles) {
+            $toUpdate = $file.Replace("$RootPath\","")
+             Write-Host "toUpdate $($toUpdate)"
+          & "$NuGetExe" "restore" "$toUpdate"
+       }
+    }
+    catch {
+        Write-Error "Unhandled error: $($_.Exception.Message)"
+    }
+}
+
+function Update-NuGetPackages {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([void])]
+    param()
+
+    try {
+        $RootPath = (Resolve-Path -Path "$($PWD.Path)").Path
+        $NuGetExe = (get-command nuget).Source
+        $projectFiles=gci -Path "$RootPath" -Recurse -filter "*.csproj"  -file | select -ExpandProperty Fullname
+        foreach ($file in $projectFiles) {
+            $toUpdate = $file.Replace("$RootPath\","")
+             Write-Host "toUpdate $($toUpdate)"
+          & "$NuGetExe" "update" "$toUpdate"
+       }
+    }
+    catch {
+        Write-Error "Unhandled error: $($_.Exception.Message)"
+    }
+}
+
+function Update-TargetFrameworkVersion {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([void])]
+    param()
+
+    try {
+        $RootPath = (Resolve-Path -Path "$($PWD.Path)").Path
+        Write-Host "RootPath $($RootPath)"
+        Set-ProjectsFrameworks -Path "$($RootPath)" -Framework "net8.0" -Verbose
+    }
+    catch {
+        Write-Error "Unhandled error: $($_.Exception.Message)"
+    }
+}
+
+ 
+
+#Set-ProjectsFrameworks -Path "$($PWD.Path)" -Framework "net8.0" -Verbose

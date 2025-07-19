@@ -15,6 +15,7 @@
     <RestorePackages>true</RestorePackages>
     <TargetFrameworkProfile />
     <LangVersion>latest</LangVersion>
+    <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>

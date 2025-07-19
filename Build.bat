@@ -1,16 +1,6 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-:: ==============================================================================
-:: 
-::      ｂｕｉｌｄ．ｂａｔ
-::
-::      𝒸𝓊𝓈𝓉ℴ𝓂 𝒷𝓊𝒾𝓁𝒹 𝓈𝒸𝓇𝒾𝓅𝓉 𝒻ℴ𝓇 ℊℯ𝓉𝒶𝒹𝓂
-::
-:: ==============================================================================
-::   arsccriptum - made in quebec 2020 <guillaumeplante.qc@gmail.com>
-:: ==============================================================================
-
 
 goto :init
 
@@ -36,7 +26,7 @@ goto :init
 :prepare
     rmdir /S /Q %__binary_path%
     ping localhost -n 2 >nul
-    goto :build
+    goto :output
 
 :build_debug
     call %__compiler% "%__solution_file%" "/t:build" "/p:Configuration=Debug"
@@ -46,12 +36,15 @@ goto :init
     call %__compiler% "%__solution_file%" "/t:build" "/p:Configuration=Release"
     goto :eof
 
+:output
+    echo "Compiler is %__compiler% and solution %__solution_file%"
+    goto :build
+
 :: ==============================================================================
 ::   Build
 :: ==============================================================================
 :build
 	call :build_debug ""
-    call :build_release ""
     goto :finished
 
 
